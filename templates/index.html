@@ -1,0 +1,3324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基于 YOLO + 文本向量 + Milvus + LLM 的智能识别平台（智能对话 + 弹幕互动 + 去重功能 + 描述轮换）</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+
+        body {
+            background: #f5f7fa;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            display: flex;
+            min-height: 900px;
+        }
+
+        /* 左侧控制面板 */
+        .left-panel {
+            width: 320px;
+            background: #fff;
+            padding: 25px;
+            border-right: 1px solid #eaeaea;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 标题 */
+        .platform-title {
+            text-align: center;
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eaeaea;
+        }
+
+        .platform-title h1 {
+            font-size: 1.4em;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+
+        /* 上传区域 */
+        .upload-section {
+            margin-bottom: 25px;
+        }
+
+        .upload-box {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 30px 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #fafafa;
+        }
+
+        .upload-box:hover {
+            border-color: #4a6cf7;
+            background: #f5f8ff;
+        }
+
+        .upload-box h3 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .upload-box p {
+            color: #666;
+            font-size: 13px;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        /* 控制区域 */
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .language-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .language-select:focus {
+            outline: none;
+            border-color: #4a6cf7;
+        }
+
+        /* 复选框样式 */
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-weight: normal;
+            font-size: 14px;
+        }
+
+        .checkbox-label input {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        /* 智能对话控制区域 */
+        .smart-dialogue-controls {
+            background: #fff7ed;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid #fed7aa;
+        }
+
+        .smart-dialogue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .smart-dialogue-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .smart-dialogue-badge {
+            background: #f97316;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .smart-dialogue-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 20px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 20px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #f97316;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        .smart-dialogue-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .smart-dialogue-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .smart-dialogue-btn.enable {
+            background: #f97316;
+            color: white;
+        }
+
+        .smart-dialogue-btn.disable {
+            background: #ef4444;
+            color: white;
+        }
+
+        .smart-dialogue-btn.reset {
+            background: #10b981;
+            color: white;
+        }
+
+        .smart-dialogue-btn.clear {
+            background: #8b5cf6;
+            color: white;
+        }
+
+        .smart-dialogue-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .smart-dialogue-info {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* 弹幕互动控制区域样式 */
+        .virtual-interaction-controls {
+            background: #f0f9ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid #d0e6ff;
+        }
+
+        .virtual-interaction-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .virtual-interaction-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .virtual-interaction-badge {
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .virtual-interaction-stats {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .virtual-interaction-stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            align-items: center;
+        }
+
+        .virtual-interaction-stat .stat-label {
+            color: #666;
+            font-size: 13px;
+        }
+
+        .virtual-interaction-stat .stat-value {
+            color: #3b82f6;
+            font-weight: 600;
+        }
+
+        .interact-time-input {
+            width: 70px;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .unit {
+            font-size: 12px;
+            color: #666;
+            margin-left: 5px;
+        }
+
+        .virtual-interaction-buttons {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .virtual-interaction-btn {
+            padding: 6px;
+            border: none;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .virtual-interaction-btn.enable {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .virtual-interaction-btn.disable {
+            background: #ef4444;
+            color: white;
+        }
+
+        .virtual-interaction-btn.set-time {
+            background: #10b981;
+            color: white;
+        }
+
+        .virtual-interaction-btn.reset {
+            background: #8b5cf6;
+            color: white;
+        }
+
+        .virtual-interaction-btn.force {
+            background: #f97316;
+            color: white;
+        }
+
+        .virtual-interaction-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .virtual-interaction-info {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* 弹幕互动检测项样式 */
+        .detection-item.virtual-interaction {
+            border-left-color: #3b82f6;
+            background: #f0f9ff;
+        }
+
+        .detection-item.virtual-interaction:hover {
+            background: #e0f2fe;
+        }
+
+        .flag-virtual-interaction {
+            background: #3b82f6;
+        }
+
+        /* 弹幕互动描述框样式 */
+        .virtual-interaction-box {
+            border: 2px solid #3b82f6;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+            background: #f0f9ff;
+        }
+
+        .virtual-interaction-marker {
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+
+        /* 去重控制区域 */
+        .deduplication-controls {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid #eaeaea;
+        }
+
+        .deduplication-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .deduplication-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .deduplication-badge {
+            background: #4a6cf7;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .deduplication-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .time-window-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .time-window-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .deduplication-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .deduplication-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .deduplication-btn.enable {
+            background: #4a6cf7;
+            color: white;
+        }
+
+        .deduplication-btn.disable {
+            background: #ef4444;
+            color: white;
+        }
+
+        .deduplication-btn.reset {
+            background: #10b981;
+            color: white;
+        }
+
+        .deduplication-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .deduplication-info {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* 通用话术控制区域 */
+        .virtual-signal-controls {
+            background: #f0f8ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid #d0e6ff;
+        }
+
+        .virtual-signal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .virtual-signal-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .virtual-signal-badge {
+            background: #8b5cf6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .virtual-signal-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .virtual-signal-counter {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+        }
+
+        .counter-label {
+            font-size: 13px;
+            color: #666;
+        }
+
+        .counter-value {
+            font-weight: 600;
+            color: #8b5cf6;
+            font-size: 14px;
+        }
+
+        .virtual-signal-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 5px;
+        }
+
+        .virtual-signal-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .virtual-signal-btn.enable {
+            background: #8b5cf6;
+            color: white;
+        }
+
+        .virtual-signal-btn.disable {
+            background: #ef4444;
+            color: white;
+        }
+
+        .virtual-signal-btn.reset {
+            background: #10b981;
+            color: white;
+        }
+
+        .virtual-signal-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .virtual-signal-info {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* 清理控制区域 */
+        .cleanup-controls {
+            background: #f0f9f4;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid #c6f6d5;
+        }
+
+        .cleanup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .cleanup-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cleanup-badge {
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .cleanup-status {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .cleanup-stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .cleanup-stat-label {
+            color: #666;
+        }
+
+        .cleanup-stat-value {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .cleanup-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .cleanup-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .cleanup-btn.clean {
+            background: #10b981;
+            color: white;
+        }
+
+        .cleanup-btn.start {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .cleanup-btn.stop {
+            background: #ef4444;
+            color: white;
+        }
+
+        .cleanup-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .cleanup-info {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* 按钮组 */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .button-group button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #processBtn {
+            background: #4a6cf7;
+            color: white;
+        }
+
+        #processBtn:hover:not(:disabled) {
+            background: #3a5ce5;
+            transform: translateY(-1px);
+        }
+
+        #processBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #reprocessBtn {
+            background: #10b981;
+            color: white;
+        }
+
+        #reprocessBtn:hover:not(:disabled) {
+            background: #0da271;
+            transform: translateY(-1px);
+        }
+
+        #reprocessBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #clearBtn {
+            background: #ef4444;
+            color: white;
+        }
+
+        #clearBtn:hover {
+            background: #dc2626;
+            transform: translateY(-1px);
+        }
+
+        /* 状态指示器 */
+        .status-indicator {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid #eaeaea;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ddd;
+        }
+
+        .status-dot.online {
+            background: #10b981;
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+        }
+
+        /* 检测项列表 */
+        .detection-items {
+            margin-top: 20px;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 300px;
+        }
+
+        .detection-item {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 3px solid #4a6cf7;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .detection-item:hover {
+            background: #f0f4ff;
+        }
+
+        .detection-item.selected {
+            background: #e8f0fe;
+            border-left-color: #ff9800;
+            box-shadow: 0 2px 8px rgba(255, 152, 0, 0.2);
+        }
+
+        .detection-item.duplicate {
+            border-left-color: #ddd;
+            background: #f5f5f5;
+        }
+
+        .detection-item.duplicate:hover {
+            background: #eeeeee;
+        }
+
+        .detection-item.rag-target {
+            border-left-color: #4a6cf7;
+            background: #f0f4ff;
+        }
+
+        .detection-item.rag-target:hover {
+            background: #e8f0fe;
+        }
+
+        /* 智能对话检测项样式 */
+        .detection-item.smart-dialogue {
+            border-left-color: #f97316;
+            background: #fff7ed;
+        }
+
+        .detection-item.smart-dialogue:hover {
+            background: #ffedd5;
+        }
+
+        /* 通用话术检测项样式 */
+        .detection-item.virtual-signal {
+            border-left-color: #8b5cf6;
+            background: #f5f3ff;
+        }
+
+        .detection-item.virtual-signal:hover {
+            background: #ede9fe;
+        }
+
+        .detection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .detection-name {
+            font-weight: 500;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .detection-confidence {
+            font-size: 13px;
+            color: #4a6cf7;
+            font-weight: 600;
+        }
+
+        /* 新增：分数显示 */
+        .detection-score {
+            font-size: 13px;
+            color: #10b981;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .detection-flags {
+            display: flex;
+            gap: 4px;
+            margin-top: 5px;
+        }
+
+        .detection-flag {
+            display: inline-block;
+            padding: 2px 6px;
+            color: white;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .flag-best {
+            background: #ff9800;
+        }
+
+        .flag-duplicate {
+            background: #9ca3af;
+        }
+
+        .flag-rag {
+            background: #4a6cf7;
+        }
+
+        .flag-second-choice {
+            background: #8b5cf6;
+        }
+
+        .flag-smart-dialogue {
+            background: #f97316;
+        }
+
+        .flag-virtual {
+            background: #8b5cf6;
+        }
+
+        /* 新增：分数标志 */
+        .flag-high-score {
+            background: #10b981;
+        }
+
+        /* 中间图片区域 */
+        .center-panel {
+            flex: 1;
+            padding: 25px;
+            background: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 800px;
+        }
+
+        .image-container {
+            width: 100%;
+            max-width: 1000px;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            position: relative;
+            min-height: 700px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .image-placeholder {
+            text-align: center;
+            color: #999;
+        }
+
+        .image-placeholder h3 {
+            margin: 15px 0 8px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        #resultImage {
+            max-width: 100%;
+            max-height: 750px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        /* 加载动画 */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.95);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            border-radius: 12px;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4a6cf7;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 右侧描述面板 */
+        .right-panel {
+            width: 350px;
+            background: #fff;
+            padding: 25px;
+            border-left: 1px solid #eaeaea;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .description-header {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eaeaea;
+        }
+
+        .description-header h2 {
+            font-size: 1.3em;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .detection-count {
+            font-size: 14px;
+            color: #4a6cf7;
+            font-weight: 500;
+        }
+
+        .best-detection-notice {
+            font-size: 12px;
+            color: #ff9800;
+            margin-top: 5px;
+            font-weight: 500;
+        }
+
+        .virtual-interaction-notice {
+            font-size: 12px;
+            color: #3b82f6;
+            margin-top: 3px;
+            font-weight: 500;
+        }
+
+        .smart-dialogue-notice {
+            font-size: 12px;
+            color: #f97316;
+            margin-top: 3px;
+            font-weight: 500;
+        }
+
+        .deduplication-notice {
+            font-size: 12px;
+            color: #8b5cf6;
+            margin-top: 3px;
+            font-weight: 500;
+        }
+
+        /* 描述内容 */
+        .description-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .description-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .description-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .description-text {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .highlight-box {
+            border: 2px solid #ff9800;
+            box-shadow: 0 4px 12px rgba(255, 152, 0, 0.15);
+            background: #fffaf0;
+        }
+
+        /* 智能对话描述框样式 */
+        .smart-dialogue-box {
+            border: 2px solid #f97316;
+            box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
+            background: #fff7ed;
+        }
+
+        .smart-dialogue-title {
+            color: #f97316;
+            font-weight: 600;
+        }
+
+        .smart-dialogue-marker {
+            background: #f97316;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+
+        /* 通用话术描述框样式 */
+        .virtual-signal-box {
+            border: 2px solid #8b5cf6;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+            background: #f5f3ff;
+        }
+
+        .virtual-signal-title {
+            color: #8b5cf6;
+            font-weight: 600;
+        }
+
+        .virtual-signal-marker {
+            background: #8b5cf6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 8px;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .empty-state h3 {
+            margin: 15px 0 8px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1600px) {
+            .container {
+                max-width: 95%;
+            }
+
+            .center-panel {
+                min-height: 700px;
+            }
+        }
+
+        @media (max-width: 1400px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .left-panel, .right-panel {
+                width: 100%;
+                border: none;
+                border-bottom: 1px solid #eaeaea;
+            }
+
+            .center-panel {
+                order: 2;
+                min-height: 600px;
+            }
+        }
+
+        /* 错误消息样式 */
+        .error-message {
+            background: #fee;
+            border: 1px solid #fcc;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 10px 0;
+            color: #c00;
+            font-size: 14px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        /* 性能统计 */
+        .performance-stats {
+            background: #f0f8ff;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            border: 1px solid #e0f0ff;
+            display: none;
+        }
+
+        .performance-stats.show {
+            display: block;
+        }
+
+        .stats-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a6cf7;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-item {
+            font-size: 13px;
+        }
+
+        .stat-label {
+            color: #666;
+            margin-bottom: 3px;
+        }
+
+        .stat-value {
+            color: #333;
+            font-weight: 600;
+        }
+
+        .stat-value.fast {
+            color: #4a6cf7;
+        }
+
+        .stat-value.slow {
+            color: #ef4444;
+        }
+
+        /* 新增：分数计算信息 */
+        .score-calculation {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #ddd;
+        }
+
+        .score-formula {
+            font-size: 11px;
+            color: #666;
+            font-family: monospace;
+            margin-bottom: 5px;
+        }
+
+        /* 智能对话历史信息 */
+        .smart-dialogue-history {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #ddd;
+            font-size: 12px;
+        }
+
+        .history-stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+
+        .history-label {
+            color: #666;
+        }
+
+        .history-value {
+            color: #f97316;
+            font-weight: 600;
+        }
+
+        /* 描述轮换信息 */
+        .description-rotation {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #ddd;
+            font-size: 12px;
+        }
+
+        .rotation-stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+
+        .rotation-label {
+            color: #666;
+        }
+
+        .rotation-value {
+            color: #8b5cf6;
+            font-weight: 600;
+        }
+
+        /* 清理状态 */
+        .cleanup-status-display {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #ddd;
+        }
+
+        .cleanup-stat {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-bottom: 3px;
+        }
+
+        .cleanup-stat-label {
+            color: #666;
+        }
+
+        .cleanup-stat-value {
+            color: #10b981;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 左侧控制面板 -->
+        <div class="left-panel">
+            <div class="platform-title">
+                <h1>基于 YOLO + 文本向量 + Milvus + LLM 的智能识别平台</h1>
+                <p style="font-size: 12px; color: #666; margin-top: 5px;">v2.6.0 - 文本检索版 + 智能对话 + 弹幕互动 + 去重功能 + 描述轮换</p>
+            </div>
+
+            <!-- 错误消息显示区域 -->
+            <div class="error-message" id="errorMessage"></div>
+
+            <!-- 上传区域 -->
+            <div class="upload-section">
+                <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+                    <h3>点击上传图片</h3>
+                    <p>支持 JPG, PNG, BMP, GIF, WebP 格式</p>
+                    <input type="file" id="fileInput" accept="image/*">
+                </div>
+            </div>
+
+            <!-- 语言选择 -->
+            <div class="control-group">
+                <label>目标语言</label>
+                    <select id="target_language" class="language-select">
+                        <option value="en-US">英语(English)</option>
+                        <option value="zh-CN">中文(简体中文)</option>
+                        <option value="ja-JP">日语(日本語)</option>
+                        <option value="ru-RU">俄语(Русский)</option>
+                        <option value="fr-FR">法语(Français)</option>
+                        <option value="ar-SA">阿拉伯语(العربية)</option>
+                    </select>
+            </div>
+
+            <!-- LLM精炼功能 -->
+            <div class="control-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="useLLM" checked>
+                    <span>LLM精炼功能：使用LLM对检索结果进行精炼摘要</span>
+                </label>
+            </div>
+
+            <!-- 智能对话控制区域 -->
+            <div class="smart-dialogue-controls" id="smartDialogueControls">
+                <div class="smart-dialogue-header">
+                    <div class="smart-dialogue-title">
+                        <span>智能对话功能</span>
+                        <span class="smart-dialogue-badge">智能对话</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="smartDialogueToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </div>
+
+                <div class="smart-dialogue-buttons">
+                    <button class="smart-dialogue-btn enable" onclick="enableSmartDialogue()">启用</button>
+                    <button class="smart-dialogue-btn disable" onclick="disableSmartDialogue()">禁用</button>
+                    <button class="smart-dialogue-btn reset" onclick="resetSmartDialogue()">重置历史</button>
+                    <button class="smart-dialogue-btn clear" onclick="clearSmartDialogue()">清空历史</button>
+                </div>
+
+                <div class="smart-dialogue-info">
+                    将部件介绍转变为连贯的智能销售讲解流程
+                </div>
+            </div>
+
+            <!-- 弹幕互动控制区域 -->
+            <div class="virtual-interaction-controls" id="virtualInteractionControls">
+                <div class="virtual-interaction-header">
+                    <div class="virtual-interaction-title">
+                        <span>弹幕互动功能</span>
+                        <span class="virtual-interaction-badge">弹幕互动</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="virtualInteractionToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </div>
+
+                <div class="virtual-interaction-stats">
+                    <div class="virtual-interaction-stat">
+                        <span class="stat-label">距离上次互动：</span>
+                        <span class="stat-value" id="timeSinceLastInteraction">0秒</span>
+                    </div>
+                    <div class="virtual-interaction-stat">
+                        <span class="stat-label">距离下次互动：</span>
+                        <span class="stat-value" id="timeUntilNextInteraction">200秒</span>
+                    </div>
+                    <div class="virtual-interaction-stat">
+                        <span class="stat-label">时间间隔：</span>
+                        <input type="number" id="interactTimeInput" class="interact-time-input"
+                               min="10" max="600" step="10" value="200">
+                        <span class="unit">秒</span>
+                    </div>
+                    <div class="virtual-interaction-stat">
+                        <span class="stat-label">描述已用：</span>
+                        <span class="stat-value" id="virtualInteractionUsed">0/30</span>
+                    </div>
+                </div>
+
+                <div class="virtual-interaction-buttons">
+                    <button class="virtual-interaction-btn enable" onclick="enableVirtualInteraction()">启用</button>
+                    <button class="virtual-interaction-btn disable" onclick="disableVirtualInteraction()">禁用</button>
+                    <button class="virtual-interaction-btn set-time" onclick="setVirtualInteractionTime()">设置时间</button>
+                    <button class="virtual-interaction-btn reset" onclick="resetVirtualInteraction()">重置</button>
+                    <button class="virtual-interaction-btn force" onclick="forceVirtualInteraction()">强制触发</button>
+                </div>
+
+                <div class="virtual-interaction-info">
+                    基于时间间隔的智能互动（最高优先级）
+                </div>
+            </div>
+
+            <!-- 去重控制区域 -->
+            <div class="deduplication-controls" id="deduplicationControls">
+                <div class="deduplication-header">
+                    <div class="deduplication-title">
+                        <span>智能去重功能</span>
+                        <span class="deduplication-badge">去重</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="deduplicationToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </div>
+
+                <div class="time-window-control">
+                    <label style="font-size: 13px;">时间窗口：</label>
+                    <input type="number" id="timeWindowInput" class="time-window-input"
+                           min="0.5" max="60" step="0.5" value="10.0">
+                    <span style="font-size: 13px;">秒</span>
+                </div>
+
+                <div class="deduplication-buttons">
+                    <button class="deduplication-btn enable" onclick="enableDeduplication()">启用</button>
+                    <button class="deduplication-btn disable" onclick="disableDeduplication()">禁用</button>
+                    <button class="deduplication-btn reset" onclick="resetDeduplication()">重置</button>
+                </div>
+
+                <div class="deduplication-info">
+                    去重功能开启时，相同部件在指定时间内不会被重复识别
+                </div>
+            </div>
+
+            <!-- 通用话术控制区域 -->
+            <div class="virtual-signal-controls" id="virtualSignalControls">
+                <div class="virtual-signal-header">
+                    <div class="virtual-signal-title">
+                        <span>通用话术功能</span>
+                        <span class="virtual-signal-badge">通用</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="virtualSignalToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </div>
+
+                <div class="virtual-signal-counter">
+                    <span class="counter-label">当前计数器：</span>
+                    <span class="counter-value" id="virtualSignalCounterDisplay">0</span>
+                </div>
+
+                <div class="virtual-signal-buttons">
+                    <button class="virtual-signal-btn enable" onclick="enableVirtualSignal()">启用</button>
+                    <button class="virtual-signal-btn disable" onclick="disableVirtualSignal()">禁用</button>
+                    <button class="virtual-signal-btn reset" onclick="resetVirtualSignalCounter()">重置</button>
+                </div>
+
+                <div class="virtual-signal-info">
+                    全是重复部件时，使用"通用话术N"进行RAG检索
+                </div>
+            </div>
+
+            <!-- 清理控制区域 -->
+            <div class="cleanup-controls" id="cleanupControls">
+                <div class="cleanup-header">
+                    <div class="cleanup-title">
+                        <span>自动清理功能</span>
+                        <span class="cleanup-badge">清理</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="cleanupToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </div>
+
+                <div class="cleanup-status" id="cleanupStatusDisplay">
+                    <div class="cleanup-stat">
+                        <span class="cleanup-stat-label">最后清理：</span>
+                        <span class="cleanup-stat-value" id="lastCleanupTime">从未</span>
+                    </div>
+                    <div class="cleanup-stat">
+                        <span class="cleanup-stat-label">下次清理：</span>
+                        <span class="cleanup-stat-value" id="nextCleanupTime">未计划</span>
+                    </div>
+                    <div class="cleanup-stat">
+                        <span class="cleanup-stat-label">历史记录：</span>
+                        <span class="cleanup-stat-value" id="historyCount">0</span>
+                    </div>
+                </div>
+
+                <div class="cleanup-buttons">
+                    <button class="cleanup-btn clean" onclick="cleanupHistoryNow()">立即清理</button>
+                    <button class="cleanup-btn start" onclick="startCleanupScheduler()">启动</button>
+                    <button class="cleanup-btn stop" onclick="stopCleanupScheduler()">停止</button>
+                </div>
+
+                <div class="cleanup-info">
+                    每2小时自动清理历史记录（智能对话、描述轮换、去重跟踪等）
+                </div>
+            </div>
+
+            <!-- 按钮组 -->
+            <div class="button-group">
+                <button id="processBtn" onclick="processImage()" disabled>开始识别</button>
+                <button id="reprocessBtn" onclick="reprocessImage()" disabled>重新处理</button>
+                <button id="clearBtn" onclick="clearImage()">清除图片</button>
+            </div>
+
+            <!-- 性能统计 -->
+            <div class="performance-stats" id="performanceStats">
+                <div class="stats-title">
+                    <span>性能统计</span>
+                    <span style="font-size: 12px; color: #888;">v2.6.0</span>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-label">YOLO推理:</div>
+                        <div class="stat-value" id="yoloTime">0ms</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">总耗时:</div>
+                        <div class="stat-value" id="totalTime">0ms</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">原始检测:</div>
+                        <div class="stat-value" id="originalDetections">0</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">去重后:</div>
+                        <div class="stat-value" id="filteredDetections">0</div>
+                    </div>
+                </div>
+
+                <!-- 分数计算信息 -->
+                <div class="score-calculation" id="scoreCalculation">
+                    <div class="score-formula" id="scoreFormula">分数 = (归一化面积^0.2) × (置信度^0.8) × 100</div>
+                </div>
+
+                <!-- 智能对话历史信息 -->
+                <div class="smart-dialogue-history" id="smartDialogueHistoryInfo" style="display: none;">
+                    <div class="history-stat">
+                        <span class="history-label">对话历史:</span>
+                        <span class="history-value" id="dialogueHistoryCount">0</span>
+                    </div>
+                    <div class="history-stat">
+                        <span class="history-label">最大长度:</span>
+                        <span class="history-value" id="dialogueMaxLength">5</span>
+                    </div>
+                    <div class="history-stat">
+                        <span class="history-label">最近部件:</span>
+                        <span class="history-value" id="dialogueRecentPart">无</span>
+                    </div>
+                </div>
+
+                <!-- 描述轮换信息 -->
+                <div class="description-rotation" id="descriptionRotationInfo" style="display: none;">
+                    <div class="rotation-stat">
+                        <span class="rotation-label">部件TOP_K:</span>
+                        <span class="rotation-value" id="componentTopK">10</span>
+                    </div>
+                    <div class="rotation-stat">
+                        <span class="rotation-label">通用话术TOP_K:</span>
+                        <span class="rotation-value" id="virtualSignalTopK">20</span>
+                    </div>
+                    <div class="rotation-stat">
+                        <span class="rotation-label">弹幕互动TOP_K:</span>
+                        <span class="rotation-value" id="virtualInteractionTopK">30</span>
+                    </div>
+                </div>
+
+                <!-- 处理优先级信息 -->
+                <div class="processing-priority" id="processingPriorityInfo" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; font-size: 12px;">
+                    <div style="color: #3b82f6; font-weight: 600; margin-bottom: 5px;">处理优先级:</div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                        <span style="color: #666;">第一优先级:</span>
+                        <span style="color: #3b82f6; font-weight: 600;">弹幕互动</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                        <span style="color: #666;">第二优先级:</span>
+                        <span style="color: #4a6cf7; font-weight: 600;">新部件RAG</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+                        <span style="color: #666;">第三优先级:</span>
+                        <span style="color: #8b5cf6; font-weight: 600;">虚拟信号</span>
+                    </div>
+                </div>
+
+                <!-- 清理状态 -->
+                <div class="cleanup-status-display" id="cleanupStatusInfo" style="display: none;">
+                    <div class="cleanup-stat">
+                        <span class="cleanup-stat-label">自动清理:</span>
+                        <span class="cleanup-stat-value" id="autoCleanupStatus">启用</span>
+                    </div>
+                    <div class="cleanup-stat">
+                        <span class="cleanup-stat-label">清理间隔:</span>
+                        <span class="cleanup-stat-value" id="cleanupInterval">2小时</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 检测项列表 -->
+            <div class="detection-items" id="detectionList">
+                <!-- 检测项会动态插入到这里 -->
+                <div class="empty-state">
+                    <h3>暂无检测结果</h3>
+                    <p>上传图片并开始识别</p>
+                </div>
+            </div>
+
+            <!-- 状态指示器 -->
+            <div class="status-indicator">
+                <div class="status-item">
+                    <div class="status-dot" id="yoloStatus"></div>
+                    <span>YOLO模型</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="textEncoderStatus"></div>
+                    <span>文本编码</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="milvusStatus"></div>
+                    <span>Milvus检索</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="llmStatus"></div>
+                    <span>LLM精炼</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="smartDialogueStatusDot"></div>
+                    <span>智能对话</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="virtualInteractionStatusDot"></div>
+                    <span>弹幕互动</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="deduplicationStatusDot"></div>
+                    <span>去重功能</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="virtualSignalStatusDot"></div>
+                    <span>通用话术</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot" id="cleanupStatusDot"></div>
+                    <span>自动清理</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间图片区域 -->
+        <div class="center-panel">
+            <div class="image-container">
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="loading-spinner"></div>
+                    <div style="font-size: 16px; color: #4a6cf7; margin-top: 10px;">正在处理图片...</div>
+                    <div id="loadingProgress" style="font-size: 14px; color: #666; margin-top: 5px;">请稍候</div>
+                </div>
+
+                <div id="imagePlaceholder" class="image-placeholder">
+                    <h3>等待上传图片</h3>
+                    <p>上传图片后，识别结果将显示在左侧和右侧</p>
+                    <p style="font-size: 12px; color: #888; margin-top: 10px;">
+                        * 智能对话功能：将部件介绍转变为连贯的智能销售讲解流程
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        * 弹幕互动功能：基于时间间隔的智能互动（最高优先级）
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        * 智能去重功能：相同部件在指定时间内不会被重复识别
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        * 通用话术功能：全是重复部件时，使用"通用话术N"进行RAG检索
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        * 描述轮换功能：每个部件检索TOP_K个描述，每次随机返回一个
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        * 分数计算：综合分数 = (归一化面积^0.2) × (置信度^0.8) × 100
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        * 处理优先级：弹幕互动 > 新部件RAG > 虚拟信号
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        * 自动清理：每2小时清理历史记录
+                    </p>
+                </div>
+                <img id="resultImage" style="display: none;">
+            </div>
+        </div>
+
+        <!-- 右侧描述面板 -->
+        <div class="right-panel">
+            <div class="description-header">
+                <h2>检测结果</h2>
+                <div class="detection-count">
+                    检测到 <span id="detectionCount">0</span> 个部件
+                    <span id="deduplicationInfo" style="font-size: 12px; color: #8b5cf6; margin-left: 8px;"></span>
+                </div>
+                <div class="best-detection-notice" id="bestDetectionNotice">
+                    * 显示选定进行RAG检索的部件描述
+                </div>
+                <div class="virtual-interaction-notice" id="virtualInteractionNotice" style="display: none;">
+                    ⏰ 弹幕互动：基于时间间隔的智能互动（最高优先级）
+                </div>
+                <div class="smart-dialogue-notice" id="smartDialogueNotice" style="display: none;">
+                    🎤 智能对话：基于历史上下文，生成连贯的销售讲解流程
+                </div>
+                <div class="deduplication-notice" id="virtualSignalNotice" style="display: none;">
+                    🎪 通用话术：全是重复部件时，使用"通用话术N"进行RAG检索
+                </div>
+            </div>
+
+            <div class="description-content" id="descriptionContent">
+                <div class="empty-state">
+                    <h3>暂无描述内容</h3>
+                    <p>开始识别后，选定的部件描述会显示在这里</p>
+                    <p style="font-size: 12px; color: #888; margin-top: 10px;">
+                        ⏰ 弹幕互动：基于时间间隔的智能互动（最高优先级）
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        🎤 智能对话：基于历史上下文，生成连贯的销售讲解流程
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        💡 提示：如果最高分数部件在去重窗口内，会自动选择其他部件
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        🔄 描述轮换：每个部件有多个不同描述，每次随机显示一个
+                    </p>
+                    <p style="font-size: 12px; color: #888; margin-top: 5px;">
+                        🎯 处理优先级：弹幕互动 > 新部件RAG > 虚拟信号
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentImageData = null;
+        let currentImageId = null;
+        let currentImageCache = null;
+        let selectedDetectionIndex = null;
+        let bestDetectionIndex = null;
+        let smartDialogueEnabled = true;
+        let virtualInteractionEnabled = true;
+        let interactTime = 200;
+        let lastInteractTime = 0;
+        let virtualInteractionUsed = 0;
+        let virtualInteractionTotal = 30;
+        let deduplicationEnabled = true;
+        let deduplicationTimeWindow = 10.0;
+        let virtualSignalEnabled = true;
+        let virtualSignalCounter = 0;
+        let cleanupSchedulerEnabled = false;
+
+        // 显示错误消息
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 5000);
+        }
+
+        // 显示加载进度
+        function updateLoadingProgress(message) {
+            const progressDiv = document.getElementById('loadingProgress');
+            if (progressDiv) {
+                progressDiv.textContent = message;
+            }
+        }
+
+        // 获取目标语言
+        function getTargetLanguage() {
+            return document.getElementById('target_language').value;
+        }
+
+        // 检查系统状态
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/system_status');
+                if (!response.ok) {
+                    console.error('系统状态检查失败:', response.status);
+                    return;
+                }
+                const data = await response.json();
+
+                // 更新所有状态指示器
+                updateAllStatusIndicators(data);
+
+                // 更新功能状态
+                updateVirtualInteractionStatus(data);
+                updateSmartDialogueStatus(data);
+                updateDeduplicationStatus(data);
+                updateVirtualSignalStatus(data);
+                updateCleanupStatus(data);
+                updateScoreCalculation(data);
+                updateDescriptionRotation(data);
+                updateProcessingPriority(data);
+
+                console.log('✅ 系统状态检查完成:', data);
+            } catch (error) {
+                console.error('检查系统状态失败:', error);
+            }
+        }
+
+        // 更新所有状态指示器
+        function updateAllStatusIndicators(data) {
+            document.getElementById('yoloStatus').className =
+                `status-dot ${data.yolo_model_loaded ? 'online' : 'offline'}`;
+            document.getElementById('textEncoderStatus').className =
+                `status-dot ${data.text_encoder_available ? 'online' : 'offline'}`;
+            document.getElementById('milvusStatus').className =
+                `status-dot ${data.milvus_available ? 'online' : 'offline'}`;
+            document.getElementById('llmStatus').className =
+                `status-dot ${data.llm_available ? 'online' : 'offline'}`;
+        }
+
+        // 更新弹幕互动状态
+        function updateVirtualInteractionStatus(data) {
+            virtualInteractionEnabled = data.virtual_interaction_enabled || false;
+            interactTime = data.interact_time || 200;
+            lastInteractTime = data.last_interact_time || 0;
+
+            // 计算时间
+            const currentTime = Date.now() / 1000;
+            let timeSinceLast = 0;
+            let timeUntilNext = interactTime;
+
+            if (lastInteractTime > 0) {
+                timeSinceLast = currentTime - lastInteractTime;
+                timeUntilNext = Math.max(0, interactTime - timeSinceLast);
+            }
+
+            // 更新UI
+            document.getElementById('virtualInteractionToggle').checked = virtualInteractionEnabled;
+            document.getElementById('virtualInteractionStatusDot').className =
+                `status-dot ${virtualInteractionEnabled ? 'online' : 'offline'}`;
+
+            document.getElementById('interactTimeInput').value = interactTime;
+            document.getElementById('timeSinceLastInteraction').textContent =
+                `${Math.floor(timeSinceLast)}秒`;
+            document.getElementById('timeUntilNextInteraction').textContent =
+                `${Math.floor(timeUntilNext)}秒`;
+
+            // 更新描述使用情况
+            const used = data.virtual_interaction_used_indices_count || 0;
+            const total = data.virtual_interaction_top_k || 30;
+            document.getElementById('virtualInteractionUsed').textContent =
+                `${used}/${total}`;
+
+            virtualInteractionUsed = used;
+            virtualInteractionTotal = total;
+        }
+
+        // 更新智能对话状态
+        function updateSmartDialogueStatus(data) {
+            smartDialogueEnabled = data.smart_dialogue_enabled || false;
+
+            // 更新UI
+            document.getElementById('smartDialogueToggle').checked = smartDialogueEnabled;
+            document.getElementById('smartDialogueStatusDot').className =
+                `status-dot ${smartDialogueEnabled ? 'online' : 'offline'}`;
+
+            // 更新对话历史信息
+            if (data.dialogue_stats) {
+                document.getElementById('dialogueHistoryCount').textContent =
+                    data.dialogue_stats.total_entries || 0;
+                document.getElementById('dialogueMaxLength').textContent =
+                    data.dialogue_stats.max_capacity || 5;
+                document.getElementById('dialogueRecentPart').textContent =
+                    data.dialogue_stats.recent_part || '无';
+
+                // 显示对话历史信息区域
+                document.getElementById('smartDialogueHistoryInfo').style.display = 'block';
+            }
+        }
+
+        // 更新去重状态
+        function updateDeduplicationStatus(data) {
+            deduplicationEnabled = data.deduplication_enabled || false;
+            deduplicationTimeWindow = data.deduplication_time_window || 10.0;
+
+            // 更新UI
+            document.getElementById('deduplicationToggle').checked = deduplicationEnabled;
+            document.getElementById('timeWindowInput').value = deduplicationTimeWindow;
+            document.getElementById('deduplicationStatusDot').className =
+                `status-dot ${deduplicationEnabled ? 'online' : 'offline'}`;
+        }
+
+        // 更新通用话术状态
+        function updateVirtualSignalStatus(data) {
+            virtualSignalEnabled = data.virtual_signal_enabled || false;
+            virtualSignalCounter = data.virtual_signal_counter || 0;
+
+            // 更新UI
+            document.getElementById('virtualSignalToggle').checked = virtualSignalEnabled;
+            document.getElementById('virtualSignalCounterDisplay').textContent = virtualSignalCounter;
+            document.getElementById('virtualSignalStatusDot').className =
+                `status-dot ${virtualSignalEnabled ? 'online' : 'offline'}`;
+        }
+
+        // 更新清理状态
+        function updateCleanupStatus(data) {
+            if (data.cleanup_scheduler) {
+                cleanupSchedulerEnabled = data.cleanup_scheduler.enabled || false;
+
+                // 更新UI
+                document.getElementById('cleanupToggle').checked = cleanupSchedulerEnabled;
+                document.getElementById('cleanupStatusDot').className =
+                    `status-dot ${cleanupSchedulerEnabled ? 'online' : 'offline'}`;
+
+                document.getElementById('lastCleanupTime').textContent =
+                    data.cleanup_scheduler.last_cleanup || '从未';
+                document.getElementById('nextCleanupTime').textContent =
+                    data.cleanup_scheduler.next_cleanup || '未计划';
+                document.getElementById('cleanupInterval').textContent =
+                    data.cleanup_scheduler.interval_hours + '小时';
+                document.getElementById('autoCleanupStatus').textContent =
+                    cleanupSchedulerEnabled ? '启用' : '禁用';
+
+                if (data.history_stats) {
+                    const totalHistory =
+                        (data.history_stats.component_history_count || 0) +
+                        (data.history_stats.virtual_signal_history_count || 0) +
+                        (data.history_stats.deduplication_tracked_count || 0);
+                    document.getElementById('historyCount').textContent = totalHistory;
+                }
+            }
+        }
+
+        // 更新分数计算信息
+        function updateScoreCalculation(data) {
+            if (data.score_calculation) {
+                const formula = data.score_calculation.formula || '分数 = (归一化面积^0.2) × (置信度^0.8) × 100';
+                document.getElementById('scoreFormula').textContent = formula;
+                document.getElementById('scoreCalculation').style.display = 'block';
+            }
+        }
+
+        // 更新描述轮换信息
+        function updateDescriptionRotation(data) {
+            if (data.description_rotation) {
+                const componentTopK = data.description_rotation.component_top_k || 10;
+                const virtualSignalTopK = data.description_rotation.virtual_signal_top_k || 20;
+                const virtualInteractionTopK = data.description_rotation.virtual_interaction_top_k || 30;
+
+                document.getElementById('componentTopK').textContent = componentTopK;
+                document.getElementById('virtualSignalTopK').textContent = virtualSignalTopK;
+                document.getElementById('virtualInteractionTopK').textContent = virtualInteractionTopK;
+                document.getElementById('descriptionRotationInfo').style.display = 'block';
+
+                if (data.cleanup_scheduler) {
+                    document.getElementById('cleanupStatusInfo').style.display = 'block';
+                }
+            }
+        }
+
+        // 更新处理优先级信息
+        function updateProcessingPriority(data) {
+            if (data.processing_priority) {
+                document.getElementById('processingPriorityInfo').style.display = 'block';
+            }
+        }
+
+        // 获取清理状态
+        async function getCleanupStatus() {
+            try {
+                const response = await fetch('/cleanup/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateCleanupStatusUI(data);
+                }
+            } catch (error) {
+                console.error('获取清理状态失败:', error);
+            }
+        }
+
+        // 更新清理状态UI
+        function updateCleanupStatusUI(data) {
+            if (data.success) {
+                document.getElementById('lastCleanupTime').textContent = data.last_cleanup_str || '从未';
+                document.getElementById('nextCleanupTime').textContent = data.next_cleanup_str || '未计划';
+                document.getElementById('historyCount').textContent =
+                    (data.history_stats?.component_history_count || 0) +
+                    (data.history_stats?.virtual_signal_history_count || 0) +
+                    (data.history_stats?.deduplication_tracked_count || 0);
+
+                document.getElementById('cleanupToggle').checked = data.scheduler_running || false;
+                cleanupSchedulerEnabled = data.scheduler_running || false;
+                document.getElementById('cleanupStatusDot').className =
+                    `status-dot ${cleanupSchedulerEnabled ? 'online' : 'offline'}`;
+            }
+        }
+
+        // 获取弹幕互动状态
+        async function getVirtualInteractionStatus() {
+            try {
+                const response = await fetch('/virtual_interaction/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateVirtualInteractionStatus(data);
+                }
+            } catch (error) {
+                console.error('获取弹幕互动状态失败:', error);
+            }
+        }
+
+        // 启用弹幕互动功能
+        async function enableVirtualInteraction() {
+            try {
+                const response = await fetch('/virtual_interaction/enable', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    virtualInteractionEnabled = true;
+                    document.getElementById('virtualInteractionToggle').checked = true;
+                    document.getElementById('virtualInteractionStatusDot').className = 'status-dot online';
+                    showError('✅ 已启用弹幕互动功能');
+                    getVirtualInteractionStatus();
+                } else {
+                    showError('启用弹幕互动功能失败');
+                }
+            } catch (error) {
+                console.error('启用弹幕互动功能失败:', error);
+                showError('启用弹幕互动功能失败: ' + error.message);
+            }
+        }
+
+        // 禁用弹幕互动功能
+        async function disableVirtualInteraction() {
+            try {
+                const response = await fetch('/virtual_interaction/disable', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    virtualInteractionEnabled = false;
+                    document.getElementById('virtualInteractionToggle').checked = false;
+                    document.getElementById('virtualInteractionStatusDot').className = 'status-dot offline';
+                    showError('✅ 已禁用弹幕互动功能');
+                    getVirtualInteractionStatus();
+                } else {
+                    showError('禁用弹幕互动功能失败');
+                }
+            } catch (error) {
+                console.error('禁用弹幕互动功能失败:', error);
+                showError('禁用弹幕互动功能失败: ' + error.message);
+            }
+        }
+
+        // 设置弹幕互动时间间隔
+        async function setVirtualInteractionTime() {
+            const newTime = parseFloat(document.getElementById('interactTimeInput').value) || 200;
+
+            try {
+                const response = await fetch(`/virtual_interaction/set_time?new_interact_time=${newTime}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    interactTime = newTime;
+                    showError(`✅ 已设置弹幕互动时间间隔: ${newTime}秒`);
+                    getVirtualInteractionStatus();
+                } else {
+                    showError('设置弹幕互动时间间隔失败');
+                }
+            } catch (error) {
+                console.error('设置弹幕互动时间间隔失败:', error);
+                showError('设置弹幕互动时间间隔失败: ' + error.message);
+            }
+        }
+
+        // 重置弹幕互动状态
+        async function resetVirtualInteraction() {
+            try {
+                const response = await fetch('/virtual_interaction/reset', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showError('✅ 已重置弹幕互动状态');
+                    getVirtualInteractionStatus();
+                } else {
+                    showError('重置弹幕互动状态失败');
+                }
+            } catch (error) {
+                console.error('重置弹幕互动状态失败:', error);
+                showError('重置弹幕互动状态失败: ' + error.message);
+            }
+        }
+
+        // 强制触发弹幕互动
+        async function forceVirtualInteraction() {
+            try {
+                const response = await fetch('/virtual_interaction/force_trigger', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showError('✅ 已强制触发弹幕互动，下次处理图片时将触发');
+                    getVirtualInteractionStatus();
+                } else {
+                    showError('强制触发弹幕互动失败');
+                }
+            } catch (error) {
+                console.error('强制触发弹幕互动失败:', error);
+                showError('强制触发弹幕互动失败: ' + error.message);
+            }
+        }
+
+        // 启用智能对话功能
+        async function enableSmartDialogue() {
+            try {
+                const response = await fetch('/smart_dialogue/enable', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    smartDialogueEnabled = true;
+                    document.getElementById('smartDialogueToggle').checked = true;
+                    document.getElementById('smartDialogueStatusDot').className = 'status-dot online';
+                    showError('✅ 已启用智能对话功能');
+
+                    // 更新对话历史信息
+                    if (data.dialogue_stats) {
+                        updateSmartDialogueStatus(data);
+                    }
+                } else {
+                    showError('启用智能对话功能失败');
+                }
+            } catch (error) {
+                console.error('启用智能对话功能失败:', error);
+                showError('启用智能对话功能失败: ' + error.message);
+            }
+        }
+
+        // 禁用智能对话功能
+        async function disableSmartDialogue() {
+            try {
+                const response = await fetch('/smart_dialogue/disable', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    smartDialogueEnabled = false;
+                    document.getElementById('smartDialogueToggle').checked = false;
+                    document.getElementById('smartDialogueStatusDot').className = 'status-dot offline';
+                    showError('✅ 已禁用智能对话功能');
+                } else {
+                    showError('禁用智能对话功能失败');
+                }
+            } catch (error) {
+                console.error('禁用智能对话功能失败:', error);
+                showError('禁用智能对话功能失败: ' + error.message);
+            }
+        }
+
+        // 重置智能对话历史
+        async function resetSmartDialogue() {
+            try {
+                const response = await fetch('/smart_dialogue/reset', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showError('✅ 已重置智能对话历史');
+
+                    // 更新对话历史信息
+                    if (data.dialogue_stats) {
+                        updateSmartDialogueStatus(data);
+                    }
+                } else {
+                    showError('重置智能对话历史失败');
+                }
+            } catch (error) {
+                console.error('重置智能对话历史失败:', error);
+                showError('重置智能对话历史失败: ' + error.message);
+            }
+        }
+
+        // 清空智能对话历史
+        async function clearSmartDialogue() {
+            try {
+                const response = await fetch('/smart_dialogue/clear', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    const clearedCount = data.cleared_count || 0;
+                    showError(`✅ 已清空智能对话历史，清除了 ${clearedCount} 条记录`);
+
+                    // 更新对话历史信息
+                    if (data.dialogue_stats) {
+                        updateSmartDialogueStatus(data);
+                    }
+                } else {
+                    showError('清空智能对话历史失败');
+                }
+            } catch (error) {
+                console.error('清空智能对话历史失败:', error);
+                showError('清空智能对话历史失败: ' + error.message);
+            }
+        }
+
+        // 立即清理历史记录
+        async function cleanupHistoryNow() {
+            try {
+                const response = await fetch('/cleanup/history', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showError('✅ 历史记录清理完成');
+                    getCleanupStatus();
+                } else {
+                    showError('清理历史记录失败');
+                }
+            } catch (error) {
+                console.error('清理历史记录失败:', error);
+                showError('清理历史记录失败: ' + error.message);
+            }
+        }
+
+        // 启动清理调度器
+        async function startCleanupScheduler() {
+            try {
+                const response = await fetch('/cleanup/start_scheduler', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showError('✅ 已启动自动清理调度器');
+                    cleanupSchedulerEnabled = true;
+                    document.getElementById('cleanupStatusDot').className = 'status-dot online';
+                    getCleanupStatus();
+                } else {
+                    showError('启动清理调度器失败');
+                }
+            } catch (error) {
+                console.error('启动清理调度器失败:', error);
+                showError('启动清理调度器失败: ' + error.message);
+            }
+        }
+
+        // 停止清理调度器
+        async function stopCleanupScheduler() {
+            try {
+                const response = await fetch('/cleanup/stop_scheduler', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showError('✅ 已停止自动清理调度器');
+                    cleanupSchedulerEnabled = false;
+                    document.getElementById('cleanupStatusDot').className = 'status-dot offline';
+                    getCleanupStatus();
+                } else {
+                    showError('停止清理调度器失败');
+                }
+            } catch (error) {
+                console.error('停止清理调度器失败:', error);
+                showError('停止清理调度器失败: ' + error.message);
+            }
+        }
+
+        // 启用去重功能
+        async function enableDeduplication() {
+            const timeWindow = parseFloat(document.getElementById('timeWindowInput').value) || 10.0;
+
+            try {
+                const response = await fetch(`/deduplication/enable?time_window=${timeWindow}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    deduplicationEnabled = true;
+                    deduplicationTimeWindow = data.time_window_seconds;
+                    document.getElementById('deduplicationToggle').checked = true;
+                    document.getElementById('deduplicationStatusDot').className = 'status-dot online';
+                    showError('✅ 已启用去重功能');
+                } else {
+                    showError('启用去重功能失败');
+                }
+            } catch (error) {
+                console.error('启用去重功能失败:', error);
+                showError('启用去重功能失败: ' + error.message);
+            }
+        }
+
+        // 禁用去重功能
+        async function disableDeduplication() {
+            try {
+                const response = await fetch('/deduplication/disable', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    deduplicationEnabled = false;
+                    document.getElementById('deduplicationToggle').checked = false;
+                    document.getElementById('deduplicationStatusDot').className = 'status-dot offline';
+                    showError('✅ 已禁用去重功能');
+                } else {
+                    showError('禁用去重功能失败');
+                }
+            } catch (error) {
+                console.error('禁用去重功能失败:', error);
+                showError('禁用去重功能失败: ' + error.message);
+            }
+        }
+
+        // 重置去重跟踪
+        async function resetDeduplication() {
+            try {
+                const response = await fetch('/deduplication/reset', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showError('✅ 已重置去重跟踪记录');
+                } else {
+                    showError('重置去重跟踪失败');
+                }
+            } catch (error) {
+                console.error('重置去重跟踪失败:', error);
+                showError('重置去重跟踪失败: ' + error.message);
+            }
+        }
+
+        // 启用通用话术功能
+        async function enableVirtualSignal() {
+            try {
+                const response = await fetch('/virtual_signal/enable', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    virtualSignalEnabled = true;
+                    document.getElementById('virtualSignalToggle').checked = true;
+                    document.getElementById('virtualSignalStatusDot').className = 'status-dot online';
+                    showError('✅ 已启用通用话术功能');
+                } else {
+                    showError('启用通用话术功能失败');
+                }
+            } catch (error) {
+                console.error('启用通用话术功能失败:', error);
+                showError('启用通用话术功能失败: ' + error.message);
+            }
+        }
+
+        // 禁用通用话术功能
+        async function disableVirtualSignal() {
+            try {
+                const response = await fetch('/virtual_signal/disable', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    virtualSignalEnabled = false;
+                    document.getElementById('virtualSignalToggle').checked = false;
+                    document.getElementById('virtualSignalStatusDot').className = 'status-dot offline';
+                    showError('✅ 已禁用通用话术功能');
+                } else {
+                    showError('禁用通用话术功能失败');
+                }
+            } catch (error) {
+                console.error('禁用通用话术功能失败:', error);
+                showError('禁用通用话术功能失败: ' + error.message);
+            }
+        }
+
+        // 重置通用话术计数器
+        async function resetVirtualSignalCounter() {
+            try {
+                const response = await fetch('/virtual_signal/reset', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    virtualSignalCounter = 0;
+                    document.getElementById('virtualSignalCounterDisplay').textContent = '0';
+                    showError('✅ 已重置通用话术计数器');
+                } else {
+                    showError('重置通用话术计数器失败');
+                }
+            } catch (error) {
+                console.error('重置通用话术计数器失败:', error);
+                showError('重置通用话术计数器失败: ' + error.message);
+            }
+        }
+
+        // 文件选择事件
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            if (this.files.length > 0) {
+                const file = this.files[0];
+                const reader = new FileReader();
+
+                reader.onload = function(e) {
+                    document.getElementById('imagePlaceholder').style.display = 'none';
+                    const img = document.getElementById('resultImage');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('processBtn').disabled = false;
+                    document.getElementById('reprocessBtn').disabled = true;
+                    currentImageData = file;
+                    currentImageId = null;
+                    currentImageCache = null;
+                    clearDetectionResults();
+                    document.getElementById('performanceStats').classList.remove('show');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 智能对话开关事件
+        document.getElementById('smartDialogueToggle').addEventListener('change', function(e) {
+            if (this.checked) {
+                enableSmartDialogue();
+            } else {
+                disableSmartDialogue();
+            }
+        });
+
+        // 弹幕互动开关事件
+        document.getElementById('virtualInteractionToggle').addEventListener('change', function(e) {
+            if (this.checked) {
+                enableVirtualInteraction();
+            } else {
+                disableVirtualInteraction();
+            }
+        });
+
+        // 去重开关事件
+        document.getElementById('deduplicationToggle').addEventListener('change', function(e) {
+            if (this.checked) {
+                enableDeduplication();
+            } else {
+                disableDeduplication();
+            }
+        });
+
+        // 通用话术开关事件
+        document.getElementById('virtualSignalToggle').addEventListener('change', function(e) {
+            if (this.checked) {
+                enableVirtualSignal();
+            } else {
+                disableVirtualSignal();
+            }
+        });
+
+        // 清理开关事件
+        document.getElementById('cleanupToggle').addEventListener('change', function(e) {
+            if (this.checked) {
+                startCleanupScheduler();
+            } else {
+                stopCleanupScheduler();
+            }
+        });
+
+        // 显示/隐藏加载动画
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        }
+
+        // 获取图片数据
+        async function fetchImageData(imageId) {
+            try {
+                updateLoadingProgress('获取图片数据...');
+                const response = await fetch(`/get_image/${imageId}`);
+                if (!response.ok) {
+                    throw new Error(`获取图片失败: HTTP ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (data.success && data.annotated_image) {
+                    return data.annotated_image;
+                } else {
+                    throw new Error('图片数据无效');
+                }
+            } catch (error) {
+                console.error('获取图片数据失败:', error);
+                throw error;
+            }
+        }
+
+        // 显示性能统计
+        function displayPerformanceStats(stats, result) {
+            const statsDiv = document.getElementById('performanceStats');
+            if (stats) {
+                document.getElementById('yoloTime').textContent = `${stats.yolo_inference_ms || 0}ms`;
+                document.getElementById('totalTime').textContent = `${stats.total_processing_ms || 0}ms`;
+
+                const totalTimeElem = document.getElementById('totalTime');
+                const totalTime = stats.total_processing_ms || 0;
+                if (totalTime < 500) {
+                    totalTimeElem.className = 'stat-value fast';
+                } else if (totalTime > 2000) {
+                    totalTimeElem.className = 'stat-value slow';
+                } else {
+                    totalTimeElem.className = 'stat-value';
+                }
+
+                if (result) {
+                    document.getElementById('originalDetections').textContent =
+                        result.original_detections || 0;
+                    document.getElementById('filteredDetections').textContent =
+                        result.filtered_detections || result.total_detections || 0;
+
+                    const deduplicationInfo = document.getElementById('deduplicationInfo');
+                    if (result.original_detections > result.filtered_detections) {
+                        const filteredOut = result.original_detections - result.filtered_detections;
+                        deduplicationInfo.textContent = `(过滤 ${filteredOut} 个重复)`;
+                        deduplicationInfo.style.display = 'inline';
+                    } else {
+                        deduplicationInfo.style.display = 'none';
+                    }
+                }
+
+                statsDiv.classList.add('show');
+            }
+        }
+
+        // 处理图片
+        async function processImage() {
+            const fileInput = document.getElementById('fileInput');
+            const useLLM = document.getElementById('useLLM').checked;
+            const targetLanguage = getTargetLanguage();
+
+            if (!fileInput.files.length) {
+                showError('请先选择图片文件！');
+                return;
+            }
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const processBtn = document.getElementById('processBtn');
+            processBtn.disabled = true;
+            processBtn.innerHTML = '处理中...';
+            showLoading(true);
+            updateLoadingProgress('上传图片中...');
+
+            try {
+                const url = `/upload_image?use_llm=${useLLM}&target_language=${encodeURIComponent(targetLanguage)}`;
+                console.log('📤 发送请求:', url);
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const result = await response.json();
+                console.log('✅ 后端响应:', result);
+
+                if (result.success) {
+                    currentImageId = result.image_id;
+
+                    updateLoadingProgress('获取标注图片...');
+                    try {
+                        const imageData = await fetchImageData(result.image_id);
+                        const img = document.getElementById('resultImage');
+                        img.src = `data:image/jpeg;base64,${imageData}`;
+                        img.style.display = 'block';
+                        currentImageCache = imageData;
+                    } catch (imageError) {
+                        console.error('⚠️ 获取图片失败:', imageError);
+                        showError('获取标注图片失败，但其他数据已加载');
+                    }
+
+                    updateDetectionResults(result);
+
+                    if (result.performance_stats) {
+                        displayPerformanceStats(result.performance_stats, result);
+                    }
+
+                    updateVirtualInteractionStatus(result);
+                    updateSmartDialogueStatus(result);
+                    updateDeduplicationStatus(result);
+                    updateVirtualSignalStatus(result);
+                    updateScoreCalculation(result);
+                    updateDescriptionRotation(result);
+                    updateProcessingPriority(result);
+
+                    document.getElementById('reprocessBtn').disabled = false;
+
+                    console.log('✅ 图片处理成功');
+                } else {
+                    showError('处理失败：' + (result.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('❌ 处理失败:', error);
+                showError('处理失败: ' + error.message);
+            } finally {
+                processBtn.disabled = false;
+                processBtn.innerHTML = '开始识别';
+                showLoading(false);
+            }
+        }
+
+        // 重新处理图片
+        async function reprocessImage() {
+            if (!currentImageId) {
+                showError('请先上传并处理图片！');
+                return;
+            }
+
+            const useLLM = document.getElementById('useLLM').checked;
+            const targetLanguage = getTargetLanguage();
+
+            const reprocessBtn = document.getElementById('reprocessBtn');
+            reprocessBtn.disabled = true;
+            reprocessBtn.innerHTML = '处理中...';
+            showLoading(true);
+            updateLoadingProgress('重新处理中...');
+
+            try {
+                const url = `/reprocess_image?use_llm=${useLLM}&target_language=${encodeURIComponent(targetLanguage)}`;
+                console.log('🔄 重新处理请求URL:', url);
+
+                const response = await fetch(url, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const result = await response.json();
+                console.log('✅ 重新处理响应:', result);
+
+                if (result.success) {
+                    currentImageId = result.image_id;
+
+                    updateLoadingProgress('获取新的标注图片...');
+                    try {
+                        const imageData = await fetchImageData(result.image_id);
+                        const img = document.getElementById('resultImage');
+                        img.src = `data:image/jpeg;base64,${imageData}`;
+                        img.style.display = 'block';
+                        currentImageCache = imageData;
+                    } catch (imageError) {
+                        console.error('⚠️ 获取新图片失败:', imageError);
+                        showError('获取新标注图片失败，但其他数据已更新');
+                    }
+
+                    updateDetectionResults(result);
+
+                    if (result.performance_stats) {
+                        displayPerformanceStats(result.performance_stats, result);
+                    }
+
+                    updateVirtualInteractionStatus(result);
+                    updateSmartDialogueStatus(result);
+                    updateDeduplicationStatus(result);
+                    updateVirtualSignalStatus(result);
+                    updateScoreCalculation(result);
+                    updateDescriptionRotation(result);
+                    updateProcessingPriority(result);
+
+                    console.log('✅ 重新处理成功');
+                } else {
+                    showError('重新处理失败：' + (result.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('❌ 重新处理失败:', error);
+                showError('重新处理失败: ' + error.message);
+            } finally {
+                reprocessBtn.disabled = false;
+                reprocessBtn.innerHTML = '重新处理';
+                showLoading(false);
+            }
+        }
+
+        // 清空检测结果
+        function clearDetectionResults() {
+            document.getElementById('detectionList').innerHTML = `
+                <div class="empty-state">
+                    <h3>暂无检测结果</h3>
+                    <p>上传图片并开始识别</p>
+                </div>
+            `;
+
+            document.getElementById('descriptionContent').innerHTML = `
+                <div class="empty-state">
+                    <h3>暂无描述内容</h3>
+                    <p>开始识别后，选定的部件描述会显示在这里</p>
+                </div>
+            `;
+
+            document.getElementById('detectionCount').textContent = '0';
+            document.getElementById('deduplicationInfo').textContent = '';
+            document.getElementById('bestDetectionNotice').style.display = 'block';
+            document.getElementById('virtualInteractionNotice').style.display = 'none';
+            document.getElementById('smartDialogueNotice').style.display = 'none';
+            document.getElementById('virtualSignalNotice').style.display = 'none';
+            document.getElementById('performanceStats').classList.remove('show');
+
+            selectedDetectionIndex = null;
+            bestDetectionIndex = null;
+        }
+
+        // 更新检测结果（支持弹幕互动）
+        function updateDetectionResults(result) {
+            const detections = result.detections || [];
+            const allDetections = result.all_detections || detections;
+            const count = result.filtered_detections || result.total_detections || allDetections.length;
+            const isVirtualInteraction = result.is_virtual_interaction || false;
+            const isVirtualSignal = result.is_virtual_signal || false;
+            const isSmartDialogue = !isVirtualInteraction && !isVirtualSignal && result.dialogue_applied;
+
+            document.getElementById('detectionCount').textContent = count;
+
+            // 更新状态通知
+            updateStatusNotices(isVirtualInteraction, isVirtualSignal, isSmartDialogue, result);
+
+            if (count === 0 && !isVirtualInteraction && !isVirtualSignal && !isSmartDialogue) {
+                clearDetectionResults();
+                return;
+            }
+
+            // 构建检测项列表
+            buildDetectionList(allDetections, detections, isVirtualInteraction, isVirtualSignal, result);
+
+            // 构建描述内容
+            buildDescriptionContent(detections, allDetections, isVirtualInteraction, isVirtualSignal, isSmartDialogue, result);
+
+            console.log('✅ 已更新检测结果，共', count, '个部件');
+            console.log('🎯 触发类型:',
+                isVirtualInteraction ? '弹幕互动' :
+                isVirtualSignal ? '虚拟信号' :
+                isSmartDialogue ? '智能对话' : '新部件RAG');
+        }
+
+        // 更新状态通知
+        function updateStatusNotices(isVirtualInteraction, isVirtualSignal, isSmartDialogue, result) {
+            const virtualInteractionNotice = document.getElementById('virtualInteractionNotice');
+            const virtualSignalNotice = document.getElementById('virtualSignalNotice');
+            const smartDialogueNotice = document.getElementById('smartDialogueNotice');
+            const bestDetectionNotice = document.getElementById('bestDetectionNotice');
+
+            if (isVirtualInteraction) {
+                virtualInteractionNotice.style.display = 'block';
+                virtualSignalNotice.style.display = 'none';
+                smartDialogueNotice.style.display = 'none';
+                bestDetectionNotice.style.display = 'none';
+            } else if (isVirtualSignal) {
+                virtualInteractionNotice.style.display = 'none';
+                virtualSignalNotice.style.display = 'block';
+                smartDialogueNotice.style.display = 'none';
+                bestDetectionNotice.style.display = 'none';
+            } else if (isSmartDialogue) {
+                virtualInteractionNotice.style.display = 'none';
+                virtualSignalNotice.style.display = 'none';
+                smartDialogueNotice.style.display = 'block';
+                bestDetectionNotice.style.display = 'none';
+            } else {
+                virtualInteractionNotice.style.display = 'none';
+                virtualSignalNotice.style.display = 'none';
+                smartDialogueNotice.style.display = 'none';
+                bestDetectionNotice.style.display = 'block';
+            }
+        }
+
+        // 构建检测项列表
+        function buildDetectionList(allDetections, targetDetections, isVirtualInteraction, isVirtualSignal, result) {
+            let detectionListHtml = '';
+
+            if (isVirtualInteraction && targetDetections.length > 0 && targetDetections[0]) {
+                const virtualDetection = targetDetections[0];
+                detectionListHtml = createVirtualInteractionDetectionItem(virtualDetection, result);
+            } else if (isVirtualSignal && targetDetections.length > 0 && targetDetections[0]) {
+                const virtualDetection = targetDetections[0];
+                detectionListHtml = createVirtualSignalDetectionItem(virtualDetection, result);
+            } else {
+                // 正常部件检测项
+                detectionListHtml = createNormalDetectionItems(allDetections, targetDetections);
+            }
+
+            document.getElementById('detectionList').innerHTML = detectionListHtml || createEmptyDetectionState();
+        }
+
+        // 创建弹幕互动检测项
+        function createVirtualInteractionDetectionItem(detection, result) {
+            const confidencePercent = (detection.confidence * 100).toFixed(1);
+            const score = detection.score || 0;
+
+            return `
+                <div class="detection-item virtual-interaction"
+                     onclick="selectDetection(0)"
+                     id="detectionItem0">
+                    <div class="detection-header">
+                        <span class="detection-name">
+                            ${detection.search_term || detection.label}
+                        </span>
+                        <span class="detection-confidence">${confidencePercent}%</span>
+                        <span class="detection-score">${score.toFixed(1)}分</span>
+                    </div>
+                    <div class="detection-flags">
+                        <span class="detection-flag flag-virtual-interaction">弹幕互动</span>
+                        <span class="detection-flag flag-rag">RAG目标</span>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        时间间隔: ${result.interact_time || 200}秒 |
+                        描述已用: ${result.virtual_interaction_counter || 0}/${result.virtual_interaction_top_k || 30}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 创建虚拟信号检测项
+        function createVirtualSignalDetectionItem(detection, result) {
+            const confidencePercent = (detection.confidence * 100).toFixed(1);
+            const score = detection.score || 0;
+
+            return `
+                <div class="detection-item virtual-signal"
+                     onclick="selectDetection(0)"
+                     id="detectionItem0">
+                    <div class="detection-header">
+                        <span class="detection-name">
+                            ${detection.search_term || detection.label}
+                        </span>
+                        <span class="detection-confidence">${confidencePercent}%</span>
+                        <span class="detection-score">${score.toFixed(1)}分</span>
+                    </div>
+                    <div class="detection-flags">
+                        <span class="detection-flag flag-virtual">通用话术</span>
+                        <span class="detection-flag flag-rag">RAG目标</span>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        通用话术计数器: ${result.virtual_signal_counter || 0}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 创建正常检测项
+        function createNormalDetectionItems(allDetections, targetDetections) {
+            let html = '';
+            let ragTargetIndex = -1;
+
+            if (targetDetections.length > 0 && targetDetections[0]) {
+                const ragTargetLabel = targetDetections[0].label;
+                ragTargetIndex = allDetections.findIndex(d => d.label === ragTargetLabel);
+            }
+
+            // 计算最高分数
+            let maxScore = 0;
+            if (allDetections.length > 0) {
+                maxScore = Math.max(...allDetections.map(d => d.score || 0));
+            }
+
+            allDetections.forEach((detection, index) => {
+                const confidencePercent = (detection.confidence * 100).toFixed(1);
+                const score = detection.score || 0;
+                const isRagTarget = index === ragTargetIndex;
+                const isDuplicate = detection.is_duplicate || false;
+                const isHighestScore = Math.abs(score - maxScore) < 0.01;
+
+                let itemClass = 'detection-item';
+                if (isRagTarget) {
+                    itemClass += ' rag-target';
+                } else if (isDuplicate) {
+                    itemClass += ' duplicate';
+                } else if (isHighestScore) {
+                    itemClass += ' selected';
+                }
+
+                let flagsHtml = '';
+                if (isHighestScore) {
+                    flagsHtml += '<span class="detection-flag flag-best">最高分</span>';
+                }
+                if (isRagTarget) {
+                    flagsHtml += '<span class="detection-flag flag-rag">RAG目标</span>';
+                }
+                if (isDuplicate) {
+                    flagsHtml += '<span class="detection-flag flag-duplicate">重复</span>';
+                }
+                if (score > 80) {
+                    flagsHtml += '<span class="detection-flag flag-high-score">高分</span>';
+                }
+
+                html += `
+                    <div class="${itemClass}"
+                         onclick="selectDetection(${index})"
+                         id="detectionItem${index}">
+                        <div class="detection-header">
+                            <span class="detection-name">
+                                ${detection.label}
+                            </span>
+                            <span class="detection-confidence">${confidencePercent}%</span>
+                            <span class="detection-score">${score.toFixed(1)}分</span>
+                        </div>
+                        ${flagsHtml ? `<div class="detection-flags">${flagsHtml}</div>` : ''}
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            位置: (${detection.cx}, ${detection.cy}) | 归一化面积: ${(detection.normalized_area || 0).toFixed(4)}
+                        </div>
+                    </div>
+                `;
+            });
+
+            return html;
+        }
+
+        // 创建空检测状态
+        function createEmptyDetectionState() {
+            return `
+                <div class="empty-state">
+                    <h3>未检测到可用部件</h3>
+                    <p>所有检测到的部件都在去重时间窗口内</p>
+                </div>
+            `;
+        }
+
+        // 构建描述内容
+        function buildDescriptionContent(detections, allDetections, isVirtualInteraction, isVirtualSignal, isSmartDialogue, result) {
+            let descriptionHtml = '';
+
+            if (detections.length > 0 && detections[0]) {
+                const targetDetection = detections[0];
+
+                if (isVirtualInteraction) {
+                    descriptionHtml = createVirtualInteractionDescription(targetDetection, result);
+                } else if (isVirtualSignal) {
+                    descriptionHtml = createVirtualSignalDescription(targetDetection, result);
+                } else if (isSmartDialogue) {
+                    descriptionHtml = createSmartDialogueDescription(targetDetection, result);
+                } else {
+                    descriptionHtml = createNormalComponentDescription(targetDetection, detections, allDetections, result);
+                }
+            } else if (allDetections.length > 0) {
+                descriptionHtml = createDeduplicationNotice(allDetections);
+            } else {
+                descriptionHtml = createEmptyDescription();
+            }
+
+            document.getElementById('descriptionContent').innerHTML = descriptionHtml;
+        }
+
+        // 创建弹幕互动描述
+        function createVirtualInteractionDescription(detection, result) {
+            const confidencePercent = (detection.confidence * 100).toFixed(1);
+            const score = detection.score || 0;
+            const description = detection.description || '暂无相关描述信息';
+
+            return `
+                <div class="description-item virtual-interaction-box">
+                    <div class="description-title">
+                        <span>${detection.label || detection.search_term}</span>
+                        <span style="color: #3b82f6; font-weight: 600;">弹幕互动</span>
+                    </div>
+                    <div class="description-text">
+                        ${description}
+                    </div>
+                    <div style="margin-top: 15px; font-size: 12px; color: #888;">
+                        <div>🎯 触发类型: 时间间隔触发 (${result.interact_time || 200}秒)</div>
+                        <div>📊 距离上次互动: ${(result.time_since_last || 0).toFixed(1)}秒</div>
+                        <div>📈 综合分数: ${score.toFixed(1)}分</div>
+                        <div>🔍 检索词: ${detection.search_term || detection.label}</div>
+                        <div>🔄 描述轮换: ${result.virtual_interaction_counter || 0}/${result.virtual_interaction_top_k || 30}</div>
+                        <div>💎 处理优先级: 最高 (弹幕互动 > 新部件RAG > 虚拟信号)</div>
+                        ${detection.rag_processed ? '<div style="color: #4a6cf7;">✓ 已进行RAG检索</div>' : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 创建虚拟信号描述
+        function createVirtualSignalDescription(detection, result) {
+            const confidencePercent = (detection.confidence * 100).toFixed(1);
+            const score = detection.score || 0;
+            const description = detection.description || '暂无相关描述信息';
+
+            return `
+                <div class="description-item virtual-signal-box">
+                    <div class="description-title">
+                        <span>${detection.label || detection.search_term}</span>
+                        <span style="color: #8b5cf6; font-weight: 600;">通用话术${result.virtual_signal_counter || 1}</span>
+                    </div>
+                    <div class="description-text">
+                        ${description}
+                    </div>
+                    <div style="margin-top: 15px; font-size: 12px; color: #888;">
+                        <div>🔍 检索词: ${detection.search_term || detection.label}</div>
+                        <div>📊 通用话术计数器: ${result.virtual_signal_counter || 0}</div>
+                        <div>📈 综合分数: ${score.toFixed(1)}分</div>
+                        <div>🔄 去重状态: 全是重复部件</div>
+                        <div>💎 处理优先级: 最低 (弹幕互动 > 新部件RAG > 虚拟信号)</div>
+                        ${detection.rag_processed ? '<div style="color: #4a6cf7;">✓ 已进行RAG检索</div>' : ''}
+                        ${detection.description_rotation ? `<div>🔄 描述轮换: 第${detection.description_rotation.index + 1}个/共${detection.description_rotation.total}个</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 创建智能对话描述
+        function createSmartDialogueDescription(detection, result) {
+            const confidencePercent = (detection.confidence * 100).toFixed(1);
+            const score = detection.score || 0;
+            const description = detection.description || '暂无相关描述信息';
+
+            return `
+                <div class="description-item smart-dialogue-box">
+                    <div class="description-title">
+                        <span>${detection.label || detection.search_term}</span>
+                        <span style="color: #f97316; font-weight: 600;">智能对话</span>
+                    </div>
+                    <div class="description-text">
+                        ${description}
+                    </div>
+                    <div style="margin-top: 15px; font-size: 12px; color: #888;">
+                        <div>🎤 衔接类型: 基于历史对话的销售讲解</div>
+                        <div>📊 对话历史: ${result.dialogue_stats?.total_entries || 0}/${result.dialogue_stats?.max_capacity || 5}</div>
+                        <div>📈 综合分数: ${score.toFixed(1)}分</div>
+                        <div>🌐 目标语言: ${detection.target_language || result.target_language || 'zh-CN'}</div>
+                        <div>💎 处理优先级: 第二 (弹幕互动 > 新部件RAG > 虚拟信号)</div>
+                        ${detection.rag_processed ? '<div style="color: #4a6cf7;">✓ 已进行RAG检索</div>' : ''}
+                        ${detection.smart_dialogue_processed ? '<div style="color: #f97316;">✓ 已进行智能对话衔接</div>' : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 创建正常部件描述
+        function createNormalComponentDescription(detection, targetDetections, allDetections, result) {
+            const confidencePercent = (detection.confidence * 100).toFixed(1);
+            const score = detection.score || 0;
+            const description = detection.description || '暂无相关描述信息';
+            const ragTargetIndex = targetDetections.findIndex(d => d.label === detection.label);
+            const isSecondChoice = ragTargetIndex > 0 && allDetections.length > 1;
+            const descriptionTitle = detection.label + (isSecondChoice ? ' (第二选择)' : '');
+
+            return `
+                <div class="description-item highlight-box">
+                    <div class="description-title">
+                        <span>${descriptionTitle}</span>
+                        <span style="color: #ff9800; font-weight: 600;">分数: ${score.toFixed(1)}分</span>
+                    </div>
+                    <div class="description-text">
+                        ${description}
+                    </div>
+                    <div style="margin-top: 15px; font-size: 12px; color: #888;">
+                        <div>📊 置信度: ${confidencePercent}%</div>
+                        <div>📈 综合分数: ${score.toFixed(1)}分</div>
+                        <div>📏 归一化面积: ${(detection.normalized_area || 0).toFixed(4)}</div>
+                        <div>📍 位置: (${detection.cx}, ${detection.cy})</div>
+                        <div>💎 处理优先级: 第二 (弹幕互动 > 新部件RAG > 虚拟信号)</div>
+                        ${detection.rag_processed ? '<div style="color: #4a6cf7;">✓ 已进行RAG检索</div>' : ''}
+                        ${detection.smart_dialogue_processed ? '<div style="color: #f97316;">✓ 已进行智能对话衔接</div>' : ''}
+                        ${detection.description_rotation ? `<div>🔄 描述轮换: 第${detection.description_rotation.index + 1}个/共${detection.description_rotation.total}个</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 创建去重通知
+        function createDeduplicationNotice(allDetections) {
+            return `
+                <div class="description-item">
+                    <div class="description-title">
+                        <span>去重通知</span>
+                        <span style="color: #8b5cf6; font-weight: 600;">智能过滤</span>
+                    </div>
+                    <div class="description-text">
+                        所有检测到的部件都在去重时间窗口内，本次不进行RAG检索。
+                        <br><br>
+                        <strong>检测到的部件：</strong><br>
+                        ${allDetections.map(d => `• ${d.label} (${(d.score || 0).toFixed(1)}分, ${(d.confidence * 100).toFixed(1)}%)`).join('<br>')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // 创建空描述
+        function createEmptyDescription() {
+            return `
+                <div class="empty-state">
+                    <h3>未检测到部件</h3>
+                    <p>请尝试上传其他图片</p>
+                </div>
+            `;
+        }
+
+        // 选择检测项
+        function selectDetection(index) {
+            if (selectedDetectionIndex !== null) {
+                const prevItem = document.getElementById(`detectionItem${selectedDetectionIndex}`);
+                if (prevItem) {
+                    prevItem.classList.remove('selected');
+                }
+            }
+
+            const currentItem = document.getElementById(`detectionItem${index}`);
+            if (currentItem) {
+                currentItem.classList.add('selected');
+                selectedDetectionIndex = index;
+            }
+        }
+
+        // 清除图片
+        function clearImage() {
+            currentImageData = null;
+            currentImageId = null;
+            currentImageCache = null;
+            selectedDetectionIndex = null;
+            bestDetectionIndex = null;
+
+            document.getElementById('fileInput').value = '';
+            document.getElementById('imagePlaceholder').style.display = 'block';
+            document.getElementById('resultImage').style.display = 'none';
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('reprocessBtn').disabled = true;
+
+            clearDetectionResults();
+
+            fetch('/clear_image', { method: 'GET' })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('✅ 清除图片成功:', data);
+                })
+                .catch(error => {
+                    console.error('❌ 清除图片失败:', error);
+                });
+        }
+
+        // 检查当前是否有已处理的图片
+        async function checkCurrentImage() {
+            try {
+                const response = await fetch('/current_image');
+                const data = await response.json();
+
+                if (data.has_image && data.image_id) {
+                    currentImageId = data.image_id;
+
+                    try {
+                        const imageData = await fetchImageData(data.image_id);
+                        document.getElementById('imagePlaceholder').style.display = 'none';
+                        const img = document.getElementById('resultImage');
+                        img.src = `data:image/jpeg;base64,${imageData}`;
+                        img.style.display = 'block';
+                        currentImageCache = imageData;
+                    } catch (imageError) {
+                        console.error('⚠️ 获取当前图片失败:', imageError);
+                    }
+
+                    const detectionsRes = await fetch('/detections');
+                    const detectionsData = await detectionsRes.json();
+
+                    if (detectionsData.detections && detectionsData.detections.length > 0) {
+                        const allDetections = detectionsData.detections;
+                        const bestDetection = allDetections.reduce((best, current) => {
+                            return (current.score > best.score) ? current : best;
+                        }, allDetections[0]);
+
+                        const result = {
+                            detections: [bestDetection],
+                            all_detections: allDetections,
+                            total_detections: allDetections.length,
+                            filtered_detections: allDetections.length,
+                            original_detections: allDetections.length,
+                            virtual_interaction_enabled: data.virtual_interaction_enabled,
+                            interact_time: data.interact_time,
+                            smart_dialogue_enabled: data.smart_dialogue_enabled,
+                            deduplication_enabled: data.deduplication_enabled,
+                            deduplication_time_window: data.deduplication_time_window,
+                            virtual_signal_enabled: data.virtual_signal_enabled,
+                            virtual_signal_counter: data.virtual_signal_counter,
+                            is_virtual_interaction: data.is_virtual_interaction,
+                            is_virtual_signal: data.is_virtual_signal,
+                            dialogue_stats: data.dialogue_stats,
+                            score_calculation: data.score_calculation,
+                            description_rotation: data.description_rotation,
+                            processing_priority: {
+                                level_1: "弹幕互动（时间驱动）",
+                                level_2: "新部件RAG（内容驱动）",
+                                level_3: "虚拟信号（内容驱动）",
+                                description: "弹幕互动 > 新部件RAG > 虚拟信号"
+                            }
+                        };
+
+                        updateDetectionResults(result);
+                        document.getElementById('reprocessBtn').disabled = false;
+                        document.getElementById('processBtn').disabled = false;
+
+                        if (data.performance_stats) {
+                            displayPerformanceStats(data.performance_stats, result);
+                        }
+
+                        updateVirtualInteractionStatus(data);
+                        updateSmartDialogueStatus(data);
+                        updateDeduplicationStatus(data);
+                        updateVirtualSignalStatus(data);
+                        updateScoreCalculation(data);
+                        updateDescriptionRotation(data);
+                        updateProcessingPriority(data);
+                    }
+                }
+            } catch (error) {
+                console.error('❌ 检查当前图片失败:', error);
+            }
+        }
+
+        // 页面加载时初始化
+        window.onload = function() {
+            checkSystemStatus();
+            checkCurrentImage();
+            getCleanupStatus();
+            getVirtualInteractionStatus();
+
+            // 定时检查
+            setInterval(checkSystemStatus, 60000);
+            setInterval(getCleanupStatus, 30000);
+            setInterval(getVirtualInteractionStatus, 10000); // 每10秒更新弹幕互动时间
+        };
+    </script>
+</body>
+</html>

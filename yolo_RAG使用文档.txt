@@ -1,4 +1,0 @@
-GB10服务器中yolo_RAG流程模型存放地址
-/data/ai/model/yolo_RAG_models
-1.Embeddi_models     存放词嵌入模型的路径
-2. yolo_models	  存放yolo模型的路径
